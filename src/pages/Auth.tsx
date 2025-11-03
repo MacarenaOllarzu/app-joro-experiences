@@ -6,15 +6,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff } from "lucide-react";
+import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
+import { signupSchema, loginSchema, CHILEAN_CITIES } from "@/lib/validations";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [emailOrUsername, setEmailOrUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [city, setCity] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -30,17 +41,73 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const validation = loginSchema.safeParse({
+          emailOrUsername,
           password,
         });
-        if (error) throw error;
+
+        if (!validation.success) {
+          const newErrors: Record<string, string> = {};
+          validation.error.issues.forEach((err) => {
+            if (err.path[0]) newErrors[err.path[0] as string] = err.message;
+          });
+          setErrors(newErrors);
+          setLoading(false);
+          return;
+        }
+
+        // Determine if input is email or username
+        const isEmail = emailOrUsername.includes("@");
+        
+        if (isEmail) {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: emailOrUsername,
+            password,
+          });
+          if (error) throw error;
+        } else {
+          // Login with username: first find the email
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("email")
+            .eq("username", emailOrUsername)
+            .single();
+
+          if (profileError || !profile) {
+            throw new Error("Usuario o contraseña incorrectos");
+          }
+
+          const { error } = await supabase.auth.signInWithPassword({
+            email: profile.email,
+            password,
+          });
+          if (error) throw error;
+        }
+        
         navigate("/dashboard");
       } else {
+        const validation = signupSchema.safeParse({
+          email,
+          password,
+          username,
+          city,
+        });
+
+        if (!validation.success) {
+          const newErrors: Record<string, string> = {};
+          validation.error.issues.forEach((err) => {
+            if (err.path[0]) newErrors[err.path[0] as string] = err.message;
+          });
+          setErrors(newErrors);
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -60,9 +127,13 @@ const Auth = () => {
         navigate("/dashboard");
       }
     } catch (error: any) {
+      const errorMsg =
+        error.message === "Invalid login credentials"
+          ? "Usuario o contraseña incorrectos"
+          : error.message;
       toast({
         title: "Error",
-        description: error.message,
+        description: errorMsg,
         variant: "destructive",
       });
     } finally {
@@ -94,36 +165,88 @@ const Auth = () => {
                   id="username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    setErrors((prev) => ({ ...prev, username: "" }));
+                  }}
                   required={!isLogin}
                   placeholder="Tu nombre"
+                  className={errors.username ? "border-destructive" : ""}
                 />
+                {errors.username && (
+                  <p className="text-xs text-destructive">{errors.username}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="city">Ciudad*</Label>
-                <Input
-                  id="city"
-                  type="text"
+                <Select
                   value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  onValueChange={(value) => {
+                    setCity(value);
+                    setErrors((prev) => ({ ...prev, city: "" }));
+                  }}
                   required={!isLogin}
-                  placeholder="Tu ciudad"
+                >
+                  <SelectTrigger
+                    className={errors.city ? "border-destructive" : ""}
+                  >
+                    <SelectValue placeholder="Selecciona tu ciudad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CHILEAN_CITIES.map((cityName) => (
+                      <SelectItem key={cityName} value={cityName}>
+                        {cityName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.city && (
+                  <p className="text-xs text-destructive">{errors.city}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signup-email">Email*</Label>
+                <Input
+                  id="signup-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setErrors((prev) => ({ ...prev, email: "" }));
+                  }}
+                  required={!isLogin}
+                  placeholder="email@dominio.com"
+                  className={errors.email ? "border-destructive" : ""}
                 />
+                {errors.email && (
+                  <p className="text-xs text-destructive">{errors.email}</p>
+                )}
               </div>
             </>
           )}
-          
-          <div className="space-y-2">
-            <Label htmlFor="email">Email*</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="email@dominio.com"
-            />
-          </div>
+
+          {isLogin && (
+            <div className="space-y-2">
+              <Label htmlFor="emailOrUsername">Email o Usuario*</Label>
+              <Input
+                id="emailOrUsername"
+                type="text"
+                value={emailOrUsername}
+                onChange={(e) => {
+                  setEmailOrUsername(e.target.value);
+                  setErrors((prev) => ({ ...prev, emailOrUsername: "" }));
+                }}
+                required
+                placeholder="email@dominio.com o usuario"
+                className={errors.emailOrUsername ? "border-destructive" : ""}
+              />
+              {errors.emailOrUsername && (
+                <p className="text-xs text-destructive">
+                  {errors.emailOrUsername}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="password">Contraseña*</Label>
@@ -132,9 +255,13 @@ const Auth = () => {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors((prev) => ({ ...prev, password: "" }));
+                }}
                 required
                 placeholder="••••••••"
+                className={errors.password ? "border-destructive" : ""}
               />
               <button
                 type="button"
@@ -148,6 +275,9 @@ const Auth = () => {
                 )}
               </button>
             </div>
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password}</p>
+            )}
           </div>
 
           <Button
@@ -160,18 +290,7 @@ const Auth = () => {
 
           {isLogin && (
             <div className="flex justify-center gap-4 text-xs">
-              <button
-                type="button"
-                className="text-primary hover:underline"
-                onClick={() => {
-                  toast({
-                    title: "Recuperar contraseña",
-                    description: "Funcionalidad próximamente disponible",
-                  });
-                }}
-              >
-                Olvidé mi contraseña
-              </button>
+              <ForgotPasswordDialog />
               <span className="text-muted-foreground">|</span>
               <button
                 type="button"

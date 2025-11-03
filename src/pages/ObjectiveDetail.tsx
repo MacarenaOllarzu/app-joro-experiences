@@ -5,8 +5,10 @@ import AppHeader from "@/components/AppHeader";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ChevronRight } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronRight, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PlaceDetailDialog } from "@/components/PlaceDetailDialog";
 
 interface ObjectiveItem {
   id: string;
@@ -31,8 +33,12 @@ const ObjectiveDetail = () => {
   const { toast } = useToast();
   const [objective, setObjective] = useState<Objective | null>(null);
   const [items, setItems] = useState<ObjectiveItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<ObjectiveItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [hasObjective, setHasObjective] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedPlace, setSelectedPlace] = useState<ObjectiveItem | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -88,20 +94,31 @@ const ObjectiveDetail = () => {
             progressData?.map((p) => p.objective_item_id) || []
           );
 
-          setItems(
-            itemsData.map((item) => ({
-              ...item,
-              completed: completedIds.has(item.id),
-            }))
-          );
+          const mappedItems = itemsData.map((item) => ({
+            ...item,
+            completed: completedIds.has(item.id),
+          }));
+          setItems(mappedItems);
+          setFilteredItems(mappedItems);
         }
       }
     } catch (error) {
-      console.error("Error loading objective:", error);
+      // Error handled silently
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredItems(items);
+    } else {
+      const query = searchQuery.toLowerCase();
+      setFilteredItems(
+        items.filter((item) => item.name.toLowerCase().includes(query))
+      );
+    }
+  }, [searchQuery, items]);
 
   const handleAddObjective = async () => {
     try {
@@ -233,27 +250,60 @@ const ObjectiveDetail = () => {
             {hasObjective ? "Eliminar objetivo" : "Agregar objetivo"}
           </Button>
 
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar lugares..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
           <div className="space-y-1">
-            {items.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => handleToggleItem(item.id, item.completed)}
-                className="w-full flex items-center justify-between p-4 hover:bg-muted rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Checkbox checked={item.completed} className="pointer-events-none" />
-                  <span className={item.completed ? "line-through text-muted-foreground" : ""}>
-                    {item.name}
-                  </span>
+            {filteredItems.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                No se encontraron lugares
+              </p>
+            ) : (
+              filteredItems.map((item) => (
+                <div key={item.id} className="flex gap-2">
+                  <button
+                    onClick={() => handleToggleItem(item.id, item.completed)}
+                    className="flex-1 flex items-center gap-3 p-4 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <Checkbox checked={item.completed} className="pointer-events-none" />
+                    <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                      {item.name}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPlace(item);
+                      setDialogOpen(true);
+                    }}
+                    className="p-4 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </button>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </main>
 
       <BottomNav />
+      
+      <PlaceDetailDialog
+        place={selectedPlace}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onToggle={handleToggleItem}
+      />
     </div>
   );
 };
