@@ -16,7 +16,7 @@ export const signupSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  emailOrUsername: z.string().trim().min(1, "Este campo es requerido"),
+  emailOrPhone: z.string().trim().min(1, "Este campo es requerido"),
   password: z.string().min(1, "La contraseña es requerida"),
 });
 
