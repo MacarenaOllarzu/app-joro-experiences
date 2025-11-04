@@ -135,9 +135,14 @@ const Dashboard = () => {
                         {userObj.objective.title}
                       </h3>
                       <div className="space-y-1">
-                        <Progress value={progress} className="h-2" />
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <Progress value={progress} className="h-2 flex-1" />
+                          <span className="text-sm font-semibold text-primary min-w-[3rem] text-right">
+                            {Math.round(progress)}%
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground">
-                          {userObj.completedCount} de {userObj.objective.total_items} completados
+                          {userObj.completedCount} de {userObj.objective.total_items} lugares
                         </p>
                       </div>
                     </div>
