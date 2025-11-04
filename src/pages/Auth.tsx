@@ -65,6 +65,7 @@ const Auth = () => {
         const isEmail = emailOrPhone.includes("@");
         
         if (isEmail) {
+          // Direct email login
           const { error } = await supabase.auth.signInWithPassword({
             email: emailOrPhone,
             password,
@@ -72,10 +73,13 @@ const Auth = () => {
           if (error) throw error;
         } else {
           // Login with phone: first find the email
+          // Remove any non-numeric characters for phone comparison
+          const cleanPhone = emailOrPhone.replace(/\D/g, '');
+          
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
             .select("email")
-            .eq("phone", emailOrPhone)
+            .or(`phone.eq.${cleanPhone},phone.eq.${emailOrPhone}`)
             .maybeSingle();
 
           if (profileError || !profile) {
