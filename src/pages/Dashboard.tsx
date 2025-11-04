@@ -128,9 +128,9 @@ const Dashboard = () => {
                     <img
                       src={userObj.objective.image_url}
                       alt={userObj.objective.title}
-                      className="w-16 h-16 rounded-xl object-cover"
+                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
                     />
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-semibold mb-2">
                         {userObj.objective.title}
                       </h3>
@@ -146,7 +146,7 @@ const Dashboard = () => {
                         </p>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
                   </div>
                 </button>
               );
