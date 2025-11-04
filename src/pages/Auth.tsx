@@ -76,18 +76,14 @@ const Auth = () => {
           // Remove any non-numeric characters for phone comparison
           const cleanPhone = emailOrPhone.replace(/\D/g, '');
           
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("email")
-            .or(`phone.eq.${cleanPhone},phone.eq.${emailOrPhone}`)
-            .maybeSingle();
+          const { data: rpcData, error: rpcError } = await supabase.rpc('get_email_by_phone', { p_phone: cleanPhone });
 
-          if (profileError || !profile) {
+          if (rpcError || !rpcData) {
             throw new Error("Teléfono o contraseña incorrectos");
           }
 
           const { error } = await supabase.auth.signInWithPassword({
-            email: profile.email,
+            email: rpcData as string,
             password,
           });
           if (error) throw error;
