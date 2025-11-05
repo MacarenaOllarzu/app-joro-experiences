@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ChevronRight, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaceDetailDialog } from "@/components/PlaceDetailDialog";
+import ObjectiveMap from "@/components/ObjectiveMap";
 
 interface ObjectiveItem {
   id: string;
@@ -126,19 +127,33 @@ const ObjectiveDetail = () => {
       if (!user || !id) return;
 
       if (hasObjective) {
-        const { error } = await supabase
+        // Delete objective
+        const { error: objError } = await supabase
           .from("user_objectives")
           .delete()
           .eq("user_id", user.id)
           .eq("objective_id", id);
 
-        if (error) throw error;
+        if (objError) throw objError;
+
+        // Delete all progress for this objective
+        const itemIds = items.map(item => item.id);
+        const { error: progressError } = await supabase
+          .from("user_progress")
+          .delete()
+          .eq("user_id", user.id)
+          .in("objective_item_id", itemIds);
+
+        if (progressError) throw progressError;
 
         toast({
           title: "Objetivo eliminado",
-          description: "El objetivo ha sido eliminado de tu lista",
+          description: "El objetivo y tu progreso han sido eliminados",
         });
         setHasObjective(false);
+        
+        // Reset completed state for all items
+        setItems(prev => prev.map(item => ({ ...item, completed: false })));
       } else {
         const { error } = await supabase.from("user_objectives").insert({
           user_id: user.id,
@@ -149,7 +164,7 @@ const ObjectiveDetail = () => {
 
         toast({
           title: "¡Objetivo agregado!",
-          description: "El objetivo ha sido agregado a tu lista",
+          description: "Ahora puedes marcar los lugares que visites",
         });
         setHasObjective(true);
       }
@@ -163,13 +178,18 @@ const ObjectiveDetail = () => {
   };
 
   const handleToggleItem = async (itemId: string, completed: boolean) => {
+    if (!hasObjective) {
+      toast({
+        title: "Agrega el objetivo primero",
+        description: "Debes agregar el objetivo antes de marcar lugares",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      if (!hasObjective) {
-        await handleAddObjective();
-      }
 
       if (completed) {
         const { error } = await supabase
@@ -243,56 +263,86 @@ const ObjectiveDetail = () => {
         </div>
 
         <div className="p-4">
-          <Button
-            onClick={handleAddObjective}
-            className="w-full bg-primary text-primary-foreground mb-6"
-          >
-            {hasObjective ? "Eliminar objetivo" : "Agregar objetivo"}
-          </Button>
-
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Buscar lugares..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            {filteredItems.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">
-                No se encontraron lugares
-              </p>
-            ) : (
-              filteredItems.map((item) => (
-                <div key={item.id} className="flex gap-2">
-                  <button
-                    onClick={() => handleToggleItem(item.id, item.completed)}
-                    className="flex-1 flex items-center gap-3 p-4 hover:bg-muted rounded-lg transition-colors"
-                  >
-                    <Checkbox checked={item.completed} className="pointer-events-none" />
-                    <span className={item.completed ? "line-through text-muted-foreground" : ""}>
-                      {item.name}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedPlace(item);
-                      setDialogOpen(true);
-                    }}
-                    className="p-4 hover:bg-muted rounded-lg transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                  </button>
+          {!hasObjective ? (
+            <div className="space-y-6 mb-6">
+              <div>
+                <h2 className="text-xl font-semibold mb-2">Sobre este objetivo</h2>
+                <p className="text-muted-foreground">{objective.description}</p>
+              </div>
+              
+              {items.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Mapa de lugares</h3>
+                  <ObjectiveMap items={items} />
+                  <p className="text-sm text-muted-foreground mt-2 text-center">
+                    {objective.total_items} lugares para descubrir
+                  </p>
                 </div>
-              ))
-            )}
-          </div>
+              )}
+
+              <Button
+                onClick={handleAddObjective}
+                className="w-full bg-primary text-primary-foreground"
+                size="lg"
+              >
+                Agregar objetivo
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={handleAddObjective}
+                variant="outline"
+                className="w-full mb-6"
+              >
+                Eliminar objetivo
+              </Button>
+
+              <div className="mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar lugares..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                {filteredItems.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
+                    No se encontraron lugares
+                  </p>
+                ) : (
+                  filteredItems.map((item) => (
+                    <div key={item.id} className="flex gap-2">
+                      <button
+                        onClick={() => handleToggleItem(item.id, item.completed)}
+                        className="flex-1 flex items-center gap-3 p-4 hover:bg-muted rounded-lg transition-colors"
+                      >
+                        <Checkbox checked={item.completed} className="pointer-events-none" />
+                        <span className={item.completed ? "line-through text-muted-foreground" : ""}>
+                          {item.name}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedPlace(item);
+                          setDialogOpen(true);
+                        }}
+                        className="p-4 hover:bg-muted rounded-lg transition-colors"
+                      >
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       </main>
 
