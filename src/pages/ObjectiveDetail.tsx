@@ -6,10 +6,16 @@ import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ChevronRight, Search } from "lucide-react";
+import { ChevronRight, Search, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaceDetailDialog } from "@/components/PlaceDetailDialog";
 import ObjectiveMap from "@/components/ObjectiveMap";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ObjectiveItem {
   id: string;
@@ -40,6 +46,7 @@ const ObjectiveDetail = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPlace, setSelectedPlace] = useState<ObjectiveItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -290,13 +297,23 @@ const ObjectiveDetail = () => {
             </div>
           ) : (
             <>
-              <Button
-                onClick={handleAddObjective}
-                variant="outline"
-                className="w-full mb-6"
-              >
-                Eliminar objetivo
-              </Button>
+              <div className="flex gap-2 mb-6">
+                <Button
+                  onClick={() => setSummaryDialogOpen(true)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <Info className="w-4 h-4 mr-2" />
+                  Resumen
+                </Button>
+                <Button
+                  onClick={handleAddObjective}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Eliminar objetivo
+                </Button>
+              </div>
 
               <div className="mb-4">
                 <div className="relative">
@@ -354,6 +371,30 @@ const ObjectiveDetail = () => {
         onOpenChange={setDialogOpen}
         onToggle={handleToggleItem}
       />
+
+      <Dialog open={summaryDialogOpen} onOpenChange={setSummaryDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{objective.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Descripción</h3>
+              <p className="text-muted-foreground">{objective.description}</p>
+            </div>
+            
+            {items.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Mapa de lugares</h3>
+                <ObjectiveMap items={items} />
+                <p className="text-sm text-muted-foreground mt-2 text-center">
+                  {objective.total_items} lugares en total
+                </p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
