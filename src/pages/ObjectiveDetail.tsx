@@ -243,8 +243,9 @@ const ObjectiveDetail = () => {
               </Button>
             </div> : <>
               <div className="flex gap-2 mb-6">
-                <Button onClick={() => setSummaryDialogOpen(true)} variant="outline" className="flex-1">Información<Info className="w-4 h-4 mr-2" />
-                  Resumen
+                <Button onClick={() => setSummaryDialogOpen(true)} variant="outline" className="flex-1">
+                  <Info className="w-4 h-4 mr-2" />
+                  Información
                 </Button>
                 <Button onClick={handleAddObjective} variant="outline" className="flex-1">
                   Eliminar objetivo
