@@ -130,10 +130,10 @@ const Profile = () => {
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       toast({
         title: "Error",
-        description: "La imagen debe ser menor a 2MB",
+        description: "La imagen debe ser menor a 10MB",
         variant: "destructive",
       });
       return;
