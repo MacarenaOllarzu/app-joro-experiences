@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_feed: {
+        Row: {
+          activity_type: string
+          created_at: string
+          id: string
+          item_name: string | null
+          objective_id: string
+          objective_item_id: string | null
+          objective_title: string
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          id?: string
+          item_name?: string | null
+          objective_id: string
+          objective_item_id?: string | null
+          objective_title: string
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          id?: string
+          item_name?: string | null
+          objective_id?: string
+          objective_item_id?: string | null
+          objective_title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       categories: {
         Row: {
           created_at: string

@@ -188,11 +188,44 @@ const ObjectiveDetail = () => {
           objective_item_id: itemId
         });
         if (error) throw error;
+
+        // Add activity to feed
+        const item = items.find(i => i.id === itemId);
+        if (item && objective) {
+          await supabase.from("activity_feed").insert({
+            user_id: user.id,
+            activity_type: "visited_place",
+            objective_id: objective.id,
+            objective_item_id: itemId,
+            objective_title: objective.title,
+            item_name: item.name
+          });
+        }
       }
-      setItems(prev => prev.map(item => item.id === itemId ? {
+      
+      const updatedItems = items.map(item => item.id === itemId ? {
         ...item,
         completed: !completed
-      } : item));
+      } : item);
+      setItems(updatedItems);
+
+      // Check if objective is now 100% complete
+      if (!completed && objective) {
+        const newCompletedCount = updatedItems.filter(i => i.completed).length;
+        if (newCompletedCount === objective.total_items) {
+          await supabase.from("activity_feed").insert({
+            user_id: user.id,
+            activity_type: "completed_objective",
+            objective_id: objective.id,
+            objective_title: objective.title
+          });
+          
+          toast({
+            title: "¡Objetivo completado! 🎉",
+            description: `Has completado ${objective.title}`
+          });
+        }
+      }
     } catch (error: any) {
       toast({
         title: "Error",
