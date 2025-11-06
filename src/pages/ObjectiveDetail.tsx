@@ -180,6 +180,14 @@ const ObjectiveDetail = () => {
           error
         } = await supabase.from("user_progress").delete().eq("user_id", user.id).eq("objective_item_id", itemId);
         if (error) throw error;
+
+        // Delete the activity feed entry for this visited place
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("objective_item_id", itemId)
+          .eq("activity_type", "visited_place");
       } else {
         const {
           error
@@ -209,9 +217,10 @@ const ObjectiveDetail = () => {
       } : item);
       setItems(updatedItems);
 
+      const newCompletedCount = updatedItems.filter(i => i.completed).length;
+
       // Check if objective is now 100% complete
       if (!completed && objective) {
-        const newCompletedCount = updatedItems.filter(i => i.completed).length;
         if (newCompletedCount === objective.total_items) {
           await supabase.from("activity_feed").insert({
             user_id: user.id,
@@ -225,6 +234,16 @@ const ObjectiveDetail = () => {
             description: `Has completado ${objective.title}`
           });
         }
+      }
+
+      // If objective is no longer complete, remove the completed objective activity
+      if (completed && objective && newCompletedCount < objective.total_items) {
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("objective_id", objective.id)
+          .eq("activity_type", "completed_objective");
       }
     } catch (error: any) {
       toast({
