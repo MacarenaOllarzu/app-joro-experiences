@@ -6,25 +6,39 @@ import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronRight } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface UserObjective {
   id: string;
+  added_at: string;
   objective: {
     id: string;
     title: string;
     total_items: number;
     image_url: string;
+    category_id: string;
   };
   completedCount: number;
 }
 
+interface Category {
+  id: string;
+  name: string;
+  icon: string | null;
+}
+
+type SortOption = "name" | "progress" | "recent";
+
 const Dashboard = () => {
   const [userObjectives, setUserObjectives] = useState<UserObjective[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<SortOption>("recent");
   const navigate = useNavigate();
 
   useEffect(() => {
     checkAuth();
+    loadCategories();
     loadUserObjectives();
   }, []);
 
@@ -32,6 +46,19 @@ const Dashboard = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       navigate("/auth");
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const { data } = await supabase
+        .from("categories")
+        .select("*")
+        .order("name");
+      
+      if (data) setCategories(data);
+    } catch (error) {
+      console.error("Error loading categories:", error);
     }
   };
 
@@ -44,11 +71,13 @@ const Dashboard = () => {
         .from("user_objectives")
         .select(`
           id,
+          added_at,
           objective:objectives (
             id,
             title,
             total_items,
-            image_url
+            image_url,
+            category_id
           )
         `)
         .eq("user_id", user.id);
@@ -86,6 +115,43 @@ const Dashboard = () => {
     }
   };
 
+  const getSortedObjectives = () => {
+    const sorted = [...userObjectives];
+    
+    switch (sortBy) {
+      case "name":
+        return sorted.sort((a, b) => 
+          a.objective.title.localeCompare(b.objective.title)
+        );
+      case "progress":
+        return sorted.sort((a, b) => {
+          const progressA = (a.completedCount / a.objective.total_items) * 100;
+          const progressB = (b.completedCount / b.objective.total_items) * 100;
+          return progressB - progressA;
+        });
+      case "recent":
+      default:
+        return sorted.sort((a, b) => 
+          new Date(b.added_at).getTime() - new Date(a.added_at).getTime()
+        );
+    }
+  };
+
+  const getObjectivesByCategory = () => {
+    const sorted = getSortedObjectives();
+    const grouped = new Map<string, UserObjective[]>();
+    
+    sorted.forEach((obj) => {
+      const categoryId = obj.objective.category_id;
+      if (!grouped.has(categoryId)) {
+        grouped.set(categoryId, []);
+      }
+      grouped.get(categoryId)!.push(obj);
+    });
+    
+    return grouped;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -94,12 +160,29 @@ const Dashboard = () => {
     );
   }
 
+  const groupedObjectives = getObjectivesByCategory();
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <AppHeader />
       
       <main className="max-w-lg mx-auto px-4 py-6">
-        <h2 className="text-2xl font-bold mb-6">Objetivos</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">Objetivos</h2>
+          
+          {userObjectives.length > 0 && (
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Recientes</SelectItem>
+                <SelectItem value="name">Nombre</SelectItem>
+                <SelectItem value="progress">Progreso</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </div>
 
         {userObjectives.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -113,42 +196,64 @@ const Dashboard = () => {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {userObjectives.map((userObj) => {
-              const progress =
-                (userObj.completedCount / userObj.objective.total_items) * 100;
-
+          <div className="space-y-8">
+            {Array.from(groupedObjectives.entries()).map(([categoryId, objectives]) => {
+              const category = categories.find((c) => c.id === categoryId);
+              
               return (
-                <button
-                  key={userObj.id}
-                  onClick={() => navigate(`/objective/${userObj.objective.id}`)}
-                  className="w-full bg-card border border-border rounded-2xl p-4 hover:bg-muted/50 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={userObj.objective.image_url}
-                      alt={userObj.objective.title}
-                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold mb-2">
-                        {userObj.objective.title}
-                      </h3>
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <Progress value={progress} className="h-2 flex-1" />
-                          <span className="text-sm font-semibold text-primary min-w-[3rem] text-right">
-                            {Math.round(progress)}%
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {userObj.completedCount} de {userObj.objective.total_items} lugares
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
+                <div key={categoryId}>
+                  <div className="flex items-center gap-2 mb-4">
+                    {category?.icon && (
+                      <span className="text-2xl">{category.icon}</span>
+                    )}
+                    <h3 className="text-lg font-semibold">
+                      {category?.name || "Sin categoría"}
+                    </h3>
+                    <span className="text-sm text-muted-foreground">
+                      ({objectives.length})
+                    </span>
                   </div>
-                </button>
+                  
+                  <div className="space-y-3">
+                    {objectives.map((userObj) => {
+                      const progress =
+                        (userObj.completedCount / userObj.objective.total_items) * 100;
+
+                      return (
+                        <button
+                          key={userObj.id}
+                          onClick={() => navigate(`/objective/${userObj.objective.id}`)}
+                          className="w-full bg-card border border-border rounded-2xl p-4 hover:bg-muted/50 transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-4">
+                            <img
+                              src={userObj.objective.image_url}
+                              alt={userObj.objective.title}
+                              className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold mb-2">
+                                {userObj.objective.title}
+                              </h3>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <Progress value={progress} className="h-2 flex-1" />
+                                  <span className="text-sm font-semibold text-primary min-w-[3rem] text-right">
+                                    {Math.round(progress)}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {userObj.completedCount} de {userObj.objective.total_items} lugares
+                                </p>
+                              </div>
+                            </div>
+                            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 self-center" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
