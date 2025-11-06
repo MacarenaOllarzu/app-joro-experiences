@@ -6,7 +6,7 @@ import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ChevronRight, Search, Info } from "lucide-react";
+import { Search, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PlaceDetailDialog } from "@/components/PlaceDetailDialog";
 import ObjectiveMap from "@/components/ObjectiveMap";
@@ -269,12 +269,12 @@ const ObjectiveDetail = () => {
                           {item.name}
                         </span>
                       </button>
-                      <button onClick={() => {
+                      <Button onClick={() => {
                 setSelectedPlace(item);
                 setDialogOpen(true);
-              }} className="p-4 hover:bg-muted rounded-lg transition-colors">
-                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                      </button>
+              }} variant="outline" size="icon" className="shrink-0">
+                        <Info className="w-4 h-4" />
+                      </Button>
                     </div>)}
               </div>
             </>}
