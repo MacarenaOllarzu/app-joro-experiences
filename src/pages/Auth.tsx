@@ -18,7 +18,6 @@ import {
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const [emailOrPhone, setEmailOrPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -47,7 +46,7 @@ const Auth = () => {
     try {
       if (isLogin) {
         const validation = loginSchema.safeParse({
-          emailOrPhone,
+          email,
           password,
         });
 
@@ -61,33 +60,11 @@ const Auth = () => {
           return;
         }
 
-        // Determine if input is email or phone
-        const isEmail = emailOrPhone.includes("@");
-        
-        if (isEmail) {
-          // Direct email login
-          const { error } = await supabase.auth.signInWithPassword({
-            email: emailOrPhone,
-            password,
-          });
-          if (error) throw error;
-        } else {
-          // Login with phone: first find the email
-          // Remove any non-numeric characters for phone comparison
-          const cleanPhone = emailOrPhone.replace(/\D/g, '');
-          
-          const { data: rpcData, error: rpcError } = await supabase.rpc('get_email_by_phone', { p_phone: cleanPhone });
-
-          if (rpcError || !rpcData) {
-            throw new Error("Teléfono o contraseña incorrectos");
-          }
-
-          const { error } = await supabase.auth.signInWithPassword({
-            email: rpcData as string,
-            password,
-          });
-          if (error) throw error;
-        }
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
         
         navigate("/dashboard");
       } else {
@@ -129,7 +106,7 @@ const Auth = () => {
     } catch (error: any) {
       const errorMsg =
         error.message === "Invalid login credentials"
-          ? "Email, teléfono o contraseña incorrectos"
+          ? "Email o contraseña incorrectos"
           : error.message;
       toast({
         title: "Error",
@@ -151,7 +128,7 @@ const Auth = () => {
           </p>
           <p className="text-xs text-muted-foreground">
             {isLogin
-              ? "Ingresa tu email o teléfono para ingresar a tu cuenta"
+              ? "Ingresa tu email para ingresar a tu cuenta"
               : "Ingresa tus datos para crear tu cuenta"}
           </p>
         </div>
@@ -227,22 +204,22 @@ const Auth = () => {
 
           {isLogin && (
             <div className="space-y-2">
-              <Label htmlFor="emailOrPhone">Email o Teléfono*</Label>
+              <Label htmlFor="login-email">Email*</Label>
               <Input
-                id="emailOrPhone"
-                type="text"
-                value={emailOrPhone}
+                id="login-email"
+                type="email"
+                value={email}
                 onChange={(e) => {
-                  setEmailOrPhone(e.target.value);
-                  setErrors((prev) => ({ ...prev, emailOrPhone: "" }));
+                  setEmail(e.target.value);
+                  setErrors((prev) => ({ ...prev, email: "" }));
                 }}
                 required
-                placeholder="email@dominio.com o teléfono"
-                className={errors.emailOrPhone ? "border-destructive" : ""}
+                placeholder="email@dominio.com"
+                className={errors.email ? "border-destructive" : ""}
               />
-              {errors.emailOrPhone && (
+              {errors.email && (
                 <p className="text-xs text-destructive">
-                  {errors.emailOrPhone}
+                  {errors.email}
                 </p>
               )}
             </div>

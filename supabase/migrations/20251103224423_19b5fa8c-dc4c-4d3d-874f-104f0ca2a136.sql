@@ -1,6 +1,5 @@
--- Add phone and avatar_url to profiles table
+-- Add avatar_url to profiles table
 ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS phone TEXT,
 ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 -- Create storage bucket for avatars (private bucket)
