@@ -382,7 +382,14 @@ const Profile = () => {
             </div>
           )}
 
-          <div className="pt-6 border-t border-border">
+          <div className="pt-6 border-t border-border space-y-3">
+            <Button
+              onClick={() => navigate("/world-map")}
+              variant="outline"
+              className="w-full"
+            >
+              🗺️ Ver Mapa Mundial
+            </Button>
             <Button
               onClick={handleSignOut}
               variant="destructive"

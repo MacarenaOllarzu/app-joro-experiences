@@ -12,6 +12,7 @@ import Profile from "./pages/Profile";
 import Add from "./pages/Add";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+import WorldMap from "./pages/WorldMap";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/add" element={<Add />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/world-map" element={<WorldMap />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
