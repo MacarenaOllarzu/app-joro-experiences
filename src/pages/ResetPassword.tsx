@@ -31,6 +31,17 @@ const ResetPassword = () => {
   useEffect(() => {
     // Check if user came from reset password email
     const checkSession = async () => {
+      // First check if there's a hash in the URL (recovery token)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const type = hashParams.get('type');
+      
+      // If there's a recovery token, wait for Supabase to process it
+      if (accessToken && type === 'recovery') {
+        // Give Supabase time to set the session
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast({
