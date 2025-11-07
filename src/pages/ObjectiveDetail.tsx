@@ -77,7 +77,7 @@ const ObjectiveDetail = () => {
         setHasObjective(!!userObj);
         const {
           data: itemsData
-        } = await supabase.from("objective_items").select("*").eq("objective_id", id).order("order_index");
+        } = await supabase.from("objective_items").select("*").eq("objective_id", id).order("name");
         if (itemsData) {
           const {
             data: progressData
