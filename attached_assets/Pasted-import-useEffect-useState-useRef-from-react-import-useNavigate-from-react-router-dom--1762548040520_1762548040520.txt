@@ -12,6 +12,7 @@ interface VisitedPlace {
   latitude: number;
   longitude: number;
   objective_title: string;
+  category: string; // Asegúrate de que esto esté presente en tu API
 }
 
 // Fix for default marker icon
@@ -21,6 +22,12 @@ L.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
+
+const categoryColors = {
+  parques: 'green',
+  paises: 'blue',
+  regiones: 'yellow',
+};
 
 const WorldMap = () => {
   const [visitedPlaces, setVisitedPlaces] = useState<VisitedPlace[]>([]);
@@ -78,6 +85,7 @@ const WorldMap = () => {
           name,
           latitude,
           longitude,
+          category,  // Asegúrate de incluir la categoría en la consulta
           objective:objectives (
             title
           )
@@ -91,6 +99,7 @@ const WorldMap = () => {
           latitude: item.latitude,
           longitude: item.longitude,
           objective_title: item.objective?.title || "Sin objetivo",
+          category: item.category || "sin categoría", // Asigna una categoría por defecto
         }));
         setVisitedPlaces(places);
       }
@@ -111,20 +120,19 @@ const WorldMap = () => {
       maxZoom: 19,
     }).addTo(mapInstance.current);
 
-    // Custom icon for visited places
-    const visitedIcon = L.icon({
-      iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41],
-    });
-
     const bounds: L.LatLngBoundsExpression = [];
 
     visitedPlaces.forEach((place) => {
       if (place.latitude && place.longitude) {
+        const visitedIcon = L.icon({
+          iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${categoryColors[place.category] || 'gray'}.png`,
+          shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
+        });
+
         const marker = L.marker([place.latitude, place.longitude], {
           icon: visitedIcon,
         })
