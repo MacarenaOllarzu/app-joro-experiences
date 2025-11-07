@@ -143,44 +143,72 @@ const Profile = () => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        throw new Error("No hay usuario autenticado");
+      }
+
+      // Delete old avatar if exists
+      if (profile?.avatar_url) {
+        const oldPath = profile.avatar_url.split('/avatars/').pop();
+        if (oldPath) {
+          await supabase.storage.from("avatars").remove([oldPath]);
+        }
+      }
 
       const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
+      // Upload the file
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file, { 
+          cacheControl: '3600',
+          upsert: false 
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(fileName);
 
+      console.log("Public URL:", publicUrl);
+
+      // Update profile state
       setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : null));
 
-      if (!editing) {
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({ avatar_url: publicUrl })
-          .eq("id", user.id);
+      // Update database
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("id", user.id);
 
-        if (updateError) throw updateError;
-
-        toast({
-          title: "Foto actualizada",
-          description: "Tu foto de perfil ha sido actualizada",
-        });
+      if (updateError) {
+        console.error("Update error:", updateError);
+        throw updateError;
       }
+
+      toast({
+        title: "Foto actualizada",
+        description: "Tu foto de perfil ha sido actualizada",
+      });
     } catch (error: any) {
+      console.error("Avatar upload error:", error);
       toast({
         title: "Error",
-        description: "Error al subir la imagen",
+        description: error.message || "Error al subir la imagen",
         variant: "destructive",
       });
     } finally {
       setUploading(false);
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
