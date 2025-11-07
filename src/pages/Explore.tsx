@@ -57,21 +57,22 @@ const Explore = () => {
   const loadObjectives = async () => {
     const { data } = await supabase
       .from("objectives")
-      .select("*")
-      .order("title");
+      .select("*");
     if (data) setObjectives(data);
   };
 
-  const filteredObjectives = objectives.filter((obj) => {
-    const matchesCategory = selectedCategory
-      ? obj.category_id ===
-        categories.find((c) => c.slug === selectedCategory)?.id
-      : true;
-    const matchesSearch = obj.title
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const filteredObjectives = objectives
+    .filter((obj) => {
+      const matchesCategory = selectedCategory
+        ? obj.category_id ===
+          categories.find((c) => c.slug === selectedCategory)?.id
+        : true;
+      const matchesSearch = obj.title
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   return (
     <div className="min-h-screen bg-background pb-20">
