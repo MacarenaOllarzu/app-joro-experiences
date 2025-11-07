@@ -59,6 +59,16 @@ const Profile = () => {
         .single();
 
       if (data) {
+        // If there's an avatar path, generate a signed URL
+        if (data.avatar_url) {
+          const { data: signedUrlData } = await supabase.storage
+            .from("avatars")
+            .createSignedUrl(data.avatar_url, 3600); // URL válida por 1 hora
+          
+          if (signedUrlData) {
+            data.avatar_url = signedUrlData.signedUrl;
+          }
+        }
         setProfile(data);
       }
     } catch (error) {
@@ -171,20 +181,18 @@ const Profile = () => {
         throw uploadError;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(fileName);
+      // Store just the file path, not the full URL
+      const avatarPath = fileName;
 
-      console.log("Public URL:", publicUrl);
+      console.log("Avatar path:", avatarPath);
 
-      // Update profile state
-      setProfile((prev) => (prev ? { ...prev, avatar_url: publicUrl } : null));
+      // Update profile state with the path
+      setProfile((prev) => (prev ? { ...prev, avatar_url: avatarPath } : null));
 
-      // Update database
+      // Update database with the path
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: avatarPath })
         .eq("id", user.id);
 
       if (updateError) {

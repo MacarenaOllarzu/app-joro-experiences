@@ -3,9 +3,9 @@ ALTER TABLE public.profiles
 ADD COLUMN IF NOT EXISTS phone TEXT,
 ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
--- Create storage bucket for avatars
+-- Create storage bucket for avatars (private bucket)
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('avatars', 'avatars', true)
+VALUES ('avatars', 'avatars', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- Drop existing policies if they exist
@@ -15,9 +15,10 @@ DROP POLICY IF EXISTS "Users can update their own avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete their own avatar" ON storage.objects;
 
 -- Create storage policies for avatars
-CREATE POLICY "Avatar images are publicly accessible"
+CREATE POLICY "Authenticated users can view avatars"
 ON storage.objects
 FOR SELECT
+TO authenticated
 USING (bucket_id = 'avatars');
 
 CREATE POLICY "Users can upload their own avatar"
