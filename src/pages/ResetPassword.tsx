@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,35 +25,48 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isValidSession, setIsValidSession] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user came from reset password email
-    const checkSession = async () => {
-      // First check if there's a hash in the URL (recovery token)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
-      
-      // If there's a recovery token, wait for Supabase to process it
-      if (accessToken && type === 'recovery') {
-        // Give Supabase time to set the session
-        await new Promise(resolve => setTimeout(resolve, 100));
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsValidSession(true);
+      } else if (!session) {
+        setIsValidSession(false);
       }
-      
+    });
+
+    // Check current session
+    const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast({
-          title: "Enlace inválido",
-          description: "Por favor solicita un nuevo enlace de recuperación",
-          variant: "destructive",
-        });
-        navigate("/auth");
+      
+      if (session) {
+        setIsValidSession(true);
+      } else {
+        // Check if there's a recovery token in the URL
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const type = hashParams.get('type');
+        
+        if (type !== 'recovery') {
+          toast({
+            title: "Enlace inválido",
+            description: "Por favor solicita un nuevo enlace de recuperación",
+            variant: "destructive",
+          });
+          navigate("/auth");
+        }
       }
     };
+
     checkSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate, toast]);
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -87,19 +101,33 @@ const ResetPassword = () => {
         description: "Tu contraseña ha sido actualizada exitosamente",
       });
 
+      // Sign out and redirect to login
+      await supabase.auth.signOut();
+      
       setTimeout(() => {
-        navigate("/dashboard");
+        navigate("/auth");
       }, 1500);
     } catch (error: any) {
+      console.error("Password reset error:", error);
       toast({
         title: "Error",
-        description: "No se pudo actualizar la contraseña",
+        description: error.message || "No se pudo actualizar la contraseña",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isValidSession && window.location.hash) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
+        <div className="text-center">
+          <p className="text-muted-foreground">Validando enlace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background">
