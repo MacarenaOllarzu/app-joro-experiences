@@ -30,6 +30,14 @@ const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
+  // ✅ Normalización universal (funciona igual que en Dashboard)
+  const normalizeText = (s: string) =>
+    (s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+
   useEffect(() => {
     checkAuth();
     loadCategories();
@@ -48,6 +56,7 @@ const Explore = () => {
       .from("categories")
       .select("*")
       .order("name");
+
     if (data) {
       setCategories(data);
       setSelectedCategory(data[0]?.slug || "");
@@ -57,22 +66,23 @@ const Explore = () => {
   const loadObjectives = async () => {
     const { data } = await supabase
       .from("objectives")
-      .select("*");
+      .select("*")
+      .order("title");
     if (data) setObjectives(data);
   };
 
-  const filteredObjectives = objectives
-    .filter((obj) => {
-      const matchesCategory = selectedCategory
-        ? obj.category_id ===
-          categories.find((c) => c.slug === selectedCategory)?.id
-        : true;
-      const matchesSearch = obj.title
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    })
-    .sort((a, b) => a.title.localeCompare(b.title));
+  // ✅ Filtro con normalización (soporta búsqueda sin tildes)
+  const filteredObjectives = objectives.filter((obj) => {
+    const matchesCategory = selectedCategory
+      ? obj.category_id === categories.find((c) => c.slug === selectedCategory)?.id
+      : true;
+
+    const matchesSearch = normalizeText(obj.title).includes(
+      normalizeText(searchQuery)
+    );
+
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -80,6 +90,8 @@ const Explore = () => {
 
       <main className="max-w-lg mx-auto">
         <div className="sticky top-14 z-30 bg-background border-b border-border">
+
+          {/* 🔽 Categorías */}
           <Tabs
             value={selectedCategory}
             onValueChange={setSelectedCategory}
@@ -90,7 +102,7 @@ const Explore = () => {
                 <TabsTrigger
                   key={category.slug}
                   value={category.slug}
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-4 py-3"
+                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary px-4 py-3"
                 >
                   {category.name}
                 </TabsTrigger>
@@ -98,6 +110,7 @@ const Explore = () => {
             </TabsList>
           </Tabs>
 
+          {/* 🔍 Barra de búsqueda */}
           <div className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -112,6 +125,7 @@ const Explore = () => {
           </div>
         </div>
 
+        {/* 🔽 Resultados */}
         <div className="p-4 space-y-4">
           {filteredObjectives.map((objective) => (
             <button
@@ -129,9 +143,7 @@ const Explore = () => {
                 <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
                   <h3 className="font-bold text-lg mb-1">{objective.title}</h3>
                   {objective.description && (
-                    <p className="text-sm text-white/90">
-                      {objective.description}
-                    </p>
+                    <p className="text-sm text-white/90">{objective.description}</p>
                   )}
                 </div>
               </div>

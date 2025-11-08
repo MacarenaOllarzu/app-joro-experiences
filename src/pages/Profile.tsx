@@ -248,6 +248,7 @@ const Profile = () => {
             </Button>
           )
         }
+        showBack
       />
 
       <main className="max-w-lg mx-auto p-4">
@@ -383,13 +384,6 @@ const Profile = () => {
           )}
 
           <div className="pt-6 border-t border-border space-y-3">
-            <Button
-              onClick={() => navigate("/world-map")}
-              variant="outline"
-              className="w-full"
-            >
-              🗺️ Ver Mapa Mundial
-            </Button>
             <Button
               onClick={handleSignOut}
               variant="destructive"

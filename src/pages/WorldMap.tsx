@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AppHeader from "@/components/AppHeader";
 import BottomNav from "@/components/BottomNav";
@@ -12,6 +12,7 @@ interface VisitedPlace {
   latitude: number;
   longitude: number;
   objective_title: string;
+  category_name: string;
 }
 
 // Fix for default marker icon
@@ -23,30 +24,35 @@ L.Icon.Default.mergeOptions({
 });
 
 const WorldMap = () => {
+  const { id } = useParams(); // puede ser "me" o un userId real
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [visitedPlaces, setVisitedPlaces] = useState<VisitedPlace[]>([]);
   const [loading, setLoading] = useState(true);
+
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
+
   const navigate = useNavigate();
 
+  // ✅ Determinar CUÁL usuario mostrar (tú o alguien más)
   useEffect(() => {
-    checkAuth();
-    loadVisitedPlaces();
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id || null;
 
-    return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-        mapInstance.current = null;
+      if (!uid) return;
+
+      if (id === "me") {
+        setCurrentUserId(uid); // tu mapa
+      } else {
+        setCurrentUserId(id || uid); // mapa de otra persona
       }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (visitedPlaces.length > 0 && mapContainer.current && !mapInstance.current) {
-      initializeMap();
     }
-  }, [visitedPlaces]);
 
+    loadUser();
+  }, [id]);
+
+  // ✅ Forzar login obligatorio
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -54,24 +60,24 @@ const WorldMap = () => {
     }
   };
 
+  // ✅ Cargar lugares visitados del usuario correcto
   const loadVisitedPlaces = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!currentUserId) return;
 
       const { data: progressData } = await supabase
         .from("user_progress")
         .select("objective_item_id")
-        .eq("user_id", user.id);
+        .eq("user_id", currentUserId);
 
       if (!progressData || progressData.length === 0) {
-        setLoading(false);
+        setVisitedPlaces([]);
         return;
       }
 
       const itemIds = progressData.map((p) => p.objective_item_id);
 
-      const { data: itemsData } = await supabase
+      const { data: itemsData, error } = await supabase
         .from("objective_items")
         .select(`
           id,
@@ -79,10 +85,18 @@ const WorldMap = () => {
           latitude,
           longitude,
           objective:objectives (
-            title
+            title,
+            category:categories (
+              name
+            )
           )
         `)
         .in("id", itemIds);
+
+      if (error) {
+        console.error("Error fetching items:", error);
+        return;
+      }
 
       if (itemsData) {
         const places = itemsData.map((item: any) => ({
@@ -91,7 +105,9 @@ const WorldMap = () => {
           latitude: item.latitude,
           longitude: item.longitude,
           objective_title: item.objective?.title || "Sin objetivo",
+          category_name: item.objective?.category?.name || "Desconocido",
         }));
+
         setVisitedPlaces(places);
       }
     } catch (error) {
@@ -101,40 +117,100 @@ const WorldMap = () => {
     }
   };
 
+  // ✅ Cargar mapa cuando ya sabemos el usuario
+  useEffect(() => {
+    checkAuth();
+
+    if (currentUserId) {
+      loadVisitedPlaces();
+    }
+
+    // limpiar el mapa al salir
+    return () => {
+      if (mapInstance.current) {
+        mapInstance.current.remove();
+        mapInstance.current = null;
+      }
+    };
+  }, [currentUserId]);
+
+  // ✅ Inicializar mapa cuando ya tenemos lugares
+  useEffect(() => {
+    if (visitedPlaces.length > 0 && mapContainer.current && !mapInstance.current) {
+      initializeMap();
+    }
+  }, [visitedPlaces]);
+
   const initializeMap = () => {
     if (!mapContainer.current) return;
 
     mapInstance.current = L.map(mapContainer.current).setView([0, 0], 2);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(mapInstance.current);
 
-    // Custom icon for visited places
-    const visitedIcon = L.icon({
-      iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41],
-    });
+    // Íconos por categoría
+    const iconsByCategory: Record<string, L.Icon> = {
+      pais: L.icon({
+        iconUrl:
+          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      }),
+      region: L.icon({
+        iconUrl:
+          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      }),
+      parque: L.icon({
+        iconUrl:
+          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+        shadowUrl:
+          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      }),
+    };
 
     const bounds: L.LatLngBoundsExpression = [];
 
     visitedPlaces.forEach((place) => {
       if (place.latitude && place.longitude) {
-        const marker = L.marker([place.latitude, place.longitude], {
-          icon: visitedIcon,
-        })
+        const normalizedCategory = place.category_name
+          ?.toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+
+        const category = normalizedCategory?.replace(/es$|s$/, "") || "parque";
+        const icon = iconsByCategory[category] || iconsByCategory.parque;
+
+        const displayCategory =
+          category === "pais"
+            ? "País"
+            : category === "region"
+            ? "Región"
+            : "Parque";
+
+        L.marker([place.latitude, place.longitude], { icon })
           .addTo(mapInstance.current!)
           .bindPopup(`
-            <div style="text-align: center;">
-              <strong>${place.name}</strong>
-              <br/>
-              <span style="font-size: 0.85em; color: #666;">${place.objective_title}</span>
-            </div>
+            <strong>${place.name}</strong><br/>
+            <span style="font-size: 0.85em; color: #666;">
+              ${place.objective_title} (${displayCategory})
+            </span>
           `);
 
         bounds.push([place.latitude, place.longitude]);
@@ -149,7 +225,7 @@ const WorldMap = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background pb-20">
-        <AppHeader title="Mapa Mundial" />
+        <AppHeader title="Mapa Mundial" showBack />
         <main className="max-w-6xl mx-auto p-4">
           <div className="flex items-center justify-center py-20">
             <p className="text-muted-foreground">Cargando mapa...</p>
@@ -162,15 +238,15 @@ const WorldMap = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <AppHeader title="Mapa Mundial" />
+      <AppHeader title="Mapa Mundial" showBack />
 
       <main className="max-w-6xl mx-auto p-4">
         <div className="mb-4">
-          <h2 className="text-xl font-bold mb-2">Tus lugares visitados</h2>
+          <h2 className="text-xl font-bold mb-2">Lugares visitados</h2>
           <p className="text-sm text-muted-foreground">
             {visitedPlaces.length === 0
-              ? "Aún no has visitado ningún lugar"
-              : `Has visitado ${visitedPlaces.length} ${
+              ? "Aún no hay lugares visitados"
+              : `Este usuario ha visitado ${visitedPlaces.length} ${
                   visitedPlaces.length === 1 ? "lugar" : "lugares"
                 }`}
           </p>
@@ -179,16 +255,34 @@ const WorldMap = () => {
         {visitedPlaces.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center bg-card border border-border rounded-lg">
             <div className="text-6xl mb-4">🗺️</div>
-            <h3 className="text-xl font-semibold mb-2">Sin lugares visitados</h3>
+            <h3 className="text-xl font-semibold mb-2">Sin lugares registrados</h3>
             <p className="text-muted-foreground mb-6">
-              Comienza a explorar objetivos y marca lugares como visitados
+              Este usuario aún no ha marcado ningún lugar como visitado.
             </p>
           </div>
         ) : (
-          <div
-            ref={mapContainer}
-            className="w-full h-[calc(100vh-280px)] min-h-[400px] rounded-lg border border-border shadow-lg"
-          />
+          <>
+            <div
+              ref={mapContainer}
+              className="w-full h-[calc(100vh-320px)] min-h-[400px] rounded-lg border border-border shadow-lg"
+            />
+
+            {/* Leyenda */}
+            <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png" className="w-4 h-4" />
+                <span>Países</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png" className="w-4 h-4" />
+                <span>Regiones</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png" className="w-4 h-4" />
+                <span>Parques</span>
+              </div>
+            </div>
+          </>
         )}
       </main>
 

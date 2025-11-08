@@ -7,10 +7,10 @@ const BottomNav = () => {
   
   const navItems = [
     { icon: Home, label: "Inicio", path: "/dashboard" },
-    { icon: Search, label: "Explorar", path: "/explore" },
-    { icon: Plus, label: "Agregar", path: "/add" },
+    { icon: Search, label: "Explorar", path: "/users" },
+    { icon: Plus, label: "Agregar", path: "/explore" },
     { icon: Bell, label: "Notificaciones", path: "/notifications" },
-    { icon: User, label: "Perfil", path: "/profile" },
+    { icon: User, label: "Perfil", path: "/user/me" },
   ];
 
   return (
