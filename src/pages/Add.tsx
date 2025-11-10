@@ -7,7 +7,7 @@ const Add = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <AppHeader title="Agregar" showBack />
+      <AppHeader title="Objetivos personalizados" showBack />
       
       <main className="max-w-lg mx-auto p-4">
         <div className="flex flex-col items-center justify-center py-20 text-center">

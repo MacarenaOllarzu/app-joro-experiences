@@ -28,6 +28,8 @@ const WorldMap = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [visitedPlaces, setVisitedPlaces] = useState<VisitedPlace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPrivate, setIsPrivate] = useState(false);
+
 
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
@@ -133,6 +135,30 @@ const WorldMap = () => {
       }
     };
   }, [currentUserId]);
+
+  // ✅ Revisar si el mapa del usuario es público
+  useEffect(() => {
+    async function checkMapPrivacy() {
+      if (!currentUserId) return;
+
+      // Cargar el perfil del usuario que estamos viendo
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("is_map_public")
+        .eq("id", currentUserId)
+        .single();
+
+      // Si el mapa es privado y NO es mi propio mapa → bloquear
+      if (!profileData?.is_map_public && id !== "me") {
+        setIsPrivate(true);
+        setLoading(false);
+        setVisitedPlaces([]);
+      }
+    }
+
+    checkMapPrivacy();
+  }, [currentUserId, id]);
+
 
   // ✅ Inicializar mapa cuando ya tenemos lugares
   useEffect(() => {
@@ -252,7 +278,16 @@ const WorldMap = () => {
           </p>
         </div>
 
-        {visitedPlaces.length === 0 ? (
+      {isPrivate ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center bg-card border border-border rounded-lg">
+          <div className="text-6xl mb-4">🔒</div>
+          <h3 className="text-xl font-semibold mb-2">Mapa privado</h3>
+          <p className="text-muted-foreground mb-6">
+            Este usuario mantiene su mapa como privado.
+          </p>
+        </div>
+      ) : visitedPlaces.length === 0 ? (
+
           <div className="flex flex-col items-center justify-center py-20 text-center bg-card border border-border rounded-lg">
             <div className="text-6xl mb-4">🗺️</div>
             <h3 className="text-xl font-semibold mb-2">Sin lugares registrados</h3>
@@ -262,13 +297,8 @@ const WorldMap = () => {
           </div>
         ) : (
           <>
-            <div
-              ref={mapContainer}
-              className="w-full h-[calc(100vh-320px)] min-h-[400px] rounded-lg border border-border shadow-lg"
-            />
-
             {/* Leyenda */}
-            <div className="flex justify-center gap-6 mt-4 text-sm text-muted-foreground">
+            <div className="flex justify-center gap-6 mb-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png" className="w-4 h-4" />
                 <span>Países</span>
@@ -282,6 +312,11 @@ const WorldMap = () => {
                 <span>Parques</span>
               </div>
             </div>
+            {/*Mapa*/}
+            <div
+              ref={mapContainer}
+              className="w-full h-[calc(100vh-320px)] min-h-[400px] rounded-lg border border-border shadow-lg"
+            /> 
           </>
         )}
       </main>

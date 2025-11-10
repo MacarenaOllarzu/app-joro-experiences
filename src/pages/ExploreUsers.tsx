@@ -92,37 +92,56 @@ const UserCard = ({ user, currentUserId }) => {
   const navigate = useNavigate();
   const [isFollowing, setIsFollowing] = useState(false);
 
+  // ✅ Cargar follow status
   useEffect(() => {
     async function check() {
       if (!currentUserId) return;
 
       const { data } = await supabase
         .from("follows")
-        .select("*")
+        .select("id")
         .eq("follower_id", currentUserId)
-        .eq("following_id", user.id);
+        .eq("following_id", user.id)
+        .maybeSingle();
 
-      setIsFollowing(!!data?.length);
+      setIsFollowing(!!data);
     }
     check();
   }, [currentUserId, user.id]);
 
+  // ✅ SEGUIR
   const follow = async (e) => {
-    e.stopPropagation(); // evita abrir el perfil
-    await supabase.from("follows").insert({
+    e.stopPropagation();
+
+    if (user.id === currentUserId) return; // seguridad adicional
+
+    const { error } = await supabase.from("follows").insert({
       follower_id: currentUserId,
       following_id: user.id,
     });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
     setIsFollowing(true);
   };
 
+  // ✅ DEJAR DE SEGUIR
   const unfollow = async (e) => {
-    e.stopPropagation(); // evita abrir el perfil
-    await supabase
+    e.stopPropagation();
+
+    const { error } = await supabase
       .from("follows")
       .delete()
       .eq("follower_id", currentUserId)
       .eq("following_id", user.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
 
     setIsFollowing(false);
   };
@@ -133,7 +152,6 @@ const UserCard = ({ user, currentUserId }) => {
       onClick={() =>
         navigate(`/user/${user.id}`, { state: { fromExplore: true } })
       }
-
     >
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
@@ -149,16 +167,22 @@ const UserCard = ({ user, currentUserId }) => {
         <span className="font-medium">{user.username}</span>
       </div>
 
-      {isFollowing ? (
-        <Button variant="outline" onClick={unfollow}>
-          Siguiendo
-        </Button>
-      ) : (
-        <Button onClick={follow}>Seguir</Button>
+      {/* ✅ NO MOSTRAR BOTÓN SI ES EL USUARIO ACTUAL */}
+      {user.id !== currentUserId && (
+        isFollowing ? (
+          <Button variant="outline" size="sm" onClick={unfollow}>
+            Siguiendo
+          </Button>
+        ) : (
+          <Button size="sm" onClick={follow}>
+            Seguir
+          </Button>
+        )
       )}
     </div>
   );
 };
 
 export default ExploreUsers;
+
 

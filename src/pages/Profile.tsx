@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, User } from "lucide-react";
 import { profileSchema, CHILEAN_CITIES } from "@/lib/validations";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -108,6 +109,8 @@ const Profile = () => {
           city: profile.city,
           phone: profile.phone || null,
           avatar_url: profile.avatar_url,
+          is_map_public: profile.is_map_public,
+
         })
         .eq("id", user.id);
 
@@ -363,6 +366,18 @@ const Profile = () => {
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" value={profile?.email || ""} disabled />
               </div>
+
+              <div className="flex items-center justify-between py-2">
+                <Label htmlFor="is_map_public">Mapa público</Label>
+                <Switch
+                  checked={profile?.is_map_public || false}
+                  onCheckedChange={(val) =>
+                    setProfile((prev) => prev ? { ...prev, is_map_public: val } : null)
+                  }
+                  id="is_map_public"
+                />
+              </div>
+
 
               <Button onClick={handleSave} className="w-full">
                 Guardar cambios

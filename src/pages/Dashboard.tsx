@@ -174,7 +174,7 @@ const Dashboard = () => {
 
         {/* ✅ Fila 1: Título + Ordenamiento */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold">Objetivos</h2>
+          <h2 className="text-2xl font-bold">Mis objetivos</h2>
 
           {userObjectives.length > 0 && (
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
