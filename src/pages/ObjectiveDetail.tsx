@@ -312,7 +312,123 @@ const ObjectiveDetail = () => {
   }
 
   const completedCount = items.filter(i => i.completed).length;
+  const allCompleted = items.length > 0 && items.every(i => i.completed);
   const progress = (completedCount / objective.total_items) * 100;
+
+  const handleMarkAll = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !objective) return;
+
+      if (!hasObjective) {
+        toast({
+          title: "Primero agrega el objetivo",
+          description: "Debes agregar este objetivo antes de marcar lugares",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // ✅ Caso 1: DESMARCAR TODO
+      if (allCompleted) {
+
+        const itemIds = items.map(i => i.id);
+
+        // Borrar progresos
+        await supabase
+          .from("user_progress")
+          .delete()
+          .eq("user_id", user.id)
+          .in("objective_item_id", itemIds);
+
+        // Borrar visited_place
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .match({
+            user_id: user.id,
+            activity_type: "visited_place",
+            objective_id: objective.id
+          });
+
+        // Borrar completed_objective
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .match({
+            user_id: user.id,
+            activity_type: "completed_objective",
+            objective_id: objective.id
+          });
+
+        // Actualizar estado local
+        const newItems = items.map(i => ({ ...i, completed: false }));
+        setItems(newItems);
+        setFilteredItems(newItems);
+
+        toast({
+          title: "Todo desmarcado",
+          description: "Se desmarcaron todos los lugares",
+        });
+
+        return;
+      }
+
+      // ✅ Caso 2: MARCAR TODO
+      const pending = items.filter(i => !i.completed);
+
+      if (pending.length === 0) return;
+
+      // user_progress
+      const inserts = pending.map(i => ({
+        user_id: user.id,
+        objective_item_id: i.id
+      }));
+      await supabase.from("user_progress").insert(inserts);
+
+      // activity_feed
+      const feed = pending.map(i => ({
+        user_id: user.id,
+        activity_type: "visited_place",
+        objective_id: objective.id,
+        objective_item_id: i.id,
+        objective_title: objective.title,
+        item_name: i.name
+      }));
+      await supabase.from("activity_feed").insert(feed);
+
+      // actualizar estado local
+      const updated = items.map(i => ({ ...i, completed: true }));
+      setItems(updated);
+      setFilteredItems(updated);
+
+      // completed_objective si corresponde
+      if (updated.every(i => i.completed)) {
+        await supabase.from("activity_feed").insert({
+          user_id: user.id,
+          activity_type: "completed_objective",
+          objective_id: objective.id,
+          objective_item_id: objective.id,
+          objective_title: objective.title,
+          item_name: null
+        });
+      }
+
+      toast({
+        title: "Listo ✅",
+        description: "Se marcaron todos los lugares",
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -358,14 +474,23 @@ const ObjectiveDetail = () => {
           ) : (
             <>
               <div className="flex gap-2 mb-6">
+                {/* Información */}
                 <Button onClick={() => setSummaryDialogOpen(true)} variant="outline" className="flex-1">
                   <Info className="w-4 h-4 mr-2" />
                   Información
                 </Button>
+
+                {/* ✅ Nuevo botón: Marcar todo */}
+                <Button onClick={handleMarkAll} variant="outline" className="flex-1">
+                  {allCompleted ? "Desmarcar todo" : "Marcar todo"}
+                </Button>
+
+                {/* Eliminar */}
                 <Button onClick={handleAddObjective} variant="outline" className="flex-1">
                   Eliminar objetivo
                 </Button>
               </div>
+
 
               <div className="mb-4">
                 <div className="relative">
