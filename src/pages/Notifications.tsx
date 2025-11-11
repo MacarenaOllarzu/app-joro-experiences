@@ -3,16 +3,17 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import AppHeader from "@/components/AppHeader";
 import BottomNav from "@/components/BottomNav";
-import { CheckCircle2, MapPin, Award, UserPlus } from "lucide-react";
+import { MapPin, Award, UserPlus } from "lucide-react";
 
 type Activity = {
   id: string;
   user_id: string;
+  actor_id: string;
   activity_type: "visited_place" | "completed_objective" | "new_follower";
   objective_id: string | null;
   objective_title: string | null;
-  objective_item_id: string | null; // lo usamos para guardar follower_id en new_follower
-  item_name: string | null; // nombre del lugar o del seguidor (new_follower)
+  objective_item_id: string | null;
+  item_name: string | null;
   created_at: string;
 };
 
@@ -29,13 +30,13 @@ function formatRel(dateString: string) {
 }
 
 function dayKey(iso: string) {
-  const d = new Date(iso);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  return iso.slice(0, 10);
 }
 
 const Notifications = () => {
   const navigate = useNavigate();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [followersInfo, setFollowersInfo] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,17 +47,50 @@ const Notifications = () => {
         return;
       }
 
+      const userId = sess.session.user.id;
+
+      // Obtener TODAS las actividades donde soy el dueño
+      // visited_place -> user_id = yo
+      // completed_objective -> user_id = yo
+      // new_follower -> actor_id = yo
       const { data, error } = await supabase
         .from("activity_feed")
         .select("*")
-        .eq("user_id", sess.session.user.id)
+        .or(`user_id.eq.${userId},actor_id.eq.${userId}`)
         .order("created_at", { ascending: false })
         .limit(200);
 
-      if (!error && data) setActivities(data as Activity[]);
+      if (error) {
+        console.error(error);
+        setLoading(false);
+        return;
+      }
+
+      const rows = data as Activity[];
+      setActivities(rows);
+
+      // Cargar nombres de quienes me siguieron
+      const followerIds = rows
+        .filter((a) => a.activity_type === "new_follower")
+        .map((a) => a.objective_item_id)
+        .filter(Boolean) as string[];
+
+      if (followerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .in("id", followerIds);
+
+        const map: Record<string, string> = {};
+        profiles?.forEach((p) => {
+          map[p.id] = p.username;
+        });
+        setFollowersInfo(map);
+      }
+
       setLoading(false);
     })();
-  }, []);
+  }, [navigate]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Activity[]>();
@@ -65,7 +99,6 @@ const Notifications = () => {
       if (!map.has(k)) map.set(k, []);
       map.get(k)!.push(a);
     }
-    // orden por día descendente ya viene por created_at desc
     return Array.from(map.entries());
   }, [activities]);
 
@@ -85,7 +118,7 @@ const Notifications = () => {
     return day.toLocaleDateString("es-ES", {
       weekday: "long",
       day: "numeric",
-      month: "long",
+      month: "long"
     });
   };
 
@@ -98,22 +131,25 @@ const Notifications = () => {
   };
 
   const textFor = (a: Activity) => {
-    switch (a.activity_type) {
-      case "completed_objective":
-        return `Has completado el objetivo de ${a.objective_title}`;
-      case "visited_place":
-        // igual que antes
-        return `Has visitado ${a.item_name} de ${a.objective_title}`;
-      case "new_follower":
-        // usamos item_name para el nombre del seguidor
-        return `${a.item_name ?? "Alguien"} te empezó a seguir`;
-      default:
-        return "";
+    if (a.activity_type === "completed_objective") {
+      return `Has completado el objetivo de ${a.objective_title}`;
     }
+
+    if (a.activity_type === "visited_place") {
+      return `Has visitado ${a.item_name} de ${a.objective_title}`;
+    }
+
+    if (a.activity_type === "new_follower") {
+      const followerName =
+        followersInfo[a.objective_item_id ?? ""] ?? "Alguien";
+      return `${followerName} te empezó a seguir`;
+    }
+
+    return "";
   };
 
   const onClickRow = (a: Activity) => {
-    if (a.activity_type === "new_follower") return; // no hay destino
+    if (a.activity_type === "new_follower") return;
     if (a.objective_id) navigate(`/objective/${a.objective_id}`);
   };
 
@@ -139,7 +175,9 @@ const Notifications = () => {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="text-6xl mb-4">🎯</div>
             <h2 className="text-2xl font-bold mb-2">Sin actividad</h2>
-            <p className="text-muted-foreground">Aquí aparecerán tus notificaciones</p>
+            <p className="text-muted-foreground">
+              Aquí aparecerán tus notificaciones
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -148,6 +186,7 @@ const Notifications = () => {
                 <h3 className="text-xs uppercase tracking-wide text-muted-foreground px-1">
                   {headerFor(k)}
                 </h3>
+
                 {items.map((a) => (
                   <div
                     key={a.id}
@@ -155,8 +194,11 @@ const Notifications = () => {
                     className="flex gap-3 p-4 bg-card border border-border rounded-lg hover:bg-muted transition-colors cursor-pointer"
                   >
                     <div className="shrink-0 mt-0.5">{iconFor(a)}</div>
+
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium leading-relaxed">{textFor(a)}</p>
+                      <p className="text-sm font-medium leading-relaxed">
+                        {textFor(a)}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatRel(a.created_at)}
                       </p>
@@ -168,6 +210,7 @@ const Notifications = () => {
           </div>
         )}
       </main>
+
       <BottomNav />
     </div>
   );

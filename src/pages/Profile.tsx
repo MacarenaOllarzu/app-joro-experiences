@@ -254,6 +254,8 @@ const Profile = () => {
         showBack
       />
 
+      
+
       <main className="max-w-lg mx-auto p-4">
         <div className="space-y-6">
           <div className="flex flex-col items-center py-8">
@@ -284,6 +286,7 @@ const Profile = () => {
                 className="hidden"
               />
             </div>
+            
             {!editing && (
               <>
                 <h2 className="text-2xl font-bold mt-4">{profile?.username}</h2>
@@ -294,6 +297,8 @@ const Profile = () => {
               </>
             )}
           </div>
+
+          
 
           {editing ? (
             <div className="space-y-4">
@@ -367,18 +372,6 @@ const Profile = () => {
                 <Input id="email" value={profile?.email || ""} disabled />
               </div>
 
-              <div className="flex items-center justify-between py-2">
-                <Label htmlFor="is_map_public">Mapa público</Label>
-                <Switch
-                  checked={profile?.is_map_public || false}
-                  onCheckedChange={(val) =>
-                    setProfile((prev) => prev ? { ...prev, is_map_public: val } : null)
-                  }
-                  id="is_map_public"
-                />
-              </div>
-
-
               <Button onClick={handleSave} className="w-full">
                 Guardar cambios
               </Button>
@@ -397,6 +390,17 @@ const Profile = () => {
               )}
             </div>
           )}
+
+          <div className="flex items-center justify-between py-2">
+            <Label htmlFor="is_map_public">Mapa público</Label>
+            <Switch
+              checked={profile?.is_map_public || false}
+              onCheckedChange={(val) =>
+                setProfile((prev) => prev ? { ...prev, is_map_public: val } : null)
+              }
+              id="is_map_public"
+            />
+          </div>
 
           <div className="pt-6 border-t border-border space-y-3">
             <Button

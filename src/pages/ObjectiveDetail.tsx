@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PlaceDetailDialog } from "@/components/PlaceDetailDialog";
 import ObjectiveMap from "@/components/ObjectiveMap";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 interface ObjectiveItem {
   id: string;
   name: string;
@@ -19,6 +20,7 @@ interface ObjectiveItem {
   order_index: number;
   completed: boolean;
 }
+
 interface Objective {
   id: string;
   title: string;
@@ -26,14 +28,12 @@ interface Objective {
   image_url: string;
   total_items: number;
 }
+
 const ObjectiveDetail = () => {
-  const {
-    id
-  } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
-  const {
-    toast
-  } = useToast();
+  const { toast } = useToast();
+
   const [objective, setObjective] = useState<Objective | null>(null);
   const [items, setItems] = useState<ObjectiveItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<ObjectiveItem[]>([]);
@@ -43,112 +43,146 @@ const ObjectiveDetail = () => {
   const [selectedPlace, setSelectedPlace] = useState<ObjectiveItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
+
   useEffect(() => {
     checkAuth();
     loadObjective();
   }, [id]);
+
   const checkAuth = async () => {
-    const {
-      data: {
-        session
-      }
-    } = await supabase.auth.getSession();
-    if (!session) {
-      navigate("/auth");
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) navigate("/auth");
   };
+
   const loadObjective = async () => {
     if (!id) return;
+
     try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const {
-        data: objData
-      } = await supabase.from("objectives").select("*").eq("id", id).single();
+
+      const { data: objData } = await supabase
+        .from("objectives")
+        .select("*")
+        .eq("id", id)
+        .single();
+
       if (objData) {
         setObjective(objData);
-        const {
-          data: userObj
-        } = await supabase.from("user_objectives").select("id").eq("user_id", user.id).eq("objective_id", id).maybeSingle();
+
+        const { data: userObj } = await supabase
+          .from("user_objectives")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("objective_id", id)
+          .maybeSingle();
+
         setHasObjective(!!userObj);
-        const {
-          data: itemsData
-        } = await supabase.from("objective_items").select("*").eq("objective_id", id).order("name");
+
+        const { data: itemsData } = await supabase
+          .from("objective_items")
+          .select("*")
+          .eq("objective_id", id)
+          .order("name");
+
         if (itemsData) {
-          const {
-            data: progressData
-          } = await supabase.from("user_progress").select("objective_item_id").eq("user_id", user.id).in("objective_item_id", itemsData.map(item => item.id));
+          const { data: progressData } = await supabase
+            .from("user_progress")
+            .select("objective_item_id")
+            .eq("user_id", user.id)
+            .in("objective_item_id", itemsData.map(i => i.id));
+
           const completedIds = new Set(progressData?.map(p => p.objective_item_id) || []);
+
           const mappedItems = itemsData.map(item => ({
             ...item,
             completed: completedIds.has(item.id)
           }));
+
           setItems(mappedItems);
           setFilteredItems(mappedItems);
         }
       }
     } catch (error) {
-      // Error handled silently
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
-    if (searchQuery.trim() === "") {
+    if (!searchQuery.trim()) {
       setFilteredItems(items);
     } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredItems(items.filter(item => item.name.toLowerCase().includes(query)));
+      const q = searchQuery.toLowerCase();
+      setFilteredItems(items.filter(i => i.name.toLowerCase().includes(q)));
     }
   }, [searchQuery, items]);
+
+
+  // ✅ CORRECCIÓN PRINCIPAL 1:
+  // AL ELIMINAR UN OBJETIVO → BORRAR TODAS SUS NOTIFICACIONES
   const handleAddObjective = async () => {
     try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user || !id) return;
+
       if (hasObjective) {
         // Delete objective
-        const {
-          error: objError
-        } = await supabase.from("user_objectives").delete().eq("user_id", user.id).eq("objective_id", id);
-        if (objError) throw objError;
+        await supabase
+          .from("user_objectives")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("objective_id", id);
 
-        // Delete all progress for this objective
-        const itemIds = items.map(item => item.id);
-        const {
-          error: progressError
-        } = await supabase.from("user_progress").delete().eq("user_id", user.id).in("objective_item_id", itemIds);
-        if (progressError) throw progressError;
+        // Delete progress
+        const itemIds = items.map(i => i.id);
+
+        await supabase
+          .from("user_progress")
+          .delete()
+          .eq("user_id", user.id)
+          .in("objective_item_id", itemIds);
+
+        // ✅ BORRAR visited_place
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .match({
+            user_id: user.id,
+            activity_type: "visited_place",
+            objective_id: id
+          });
+
+        // ✅ BORRAR completed_objective
+        await supabase
+          .from("activity_feed")
+          .delete()
+          .match({
+            user_id: user.id,
+            activity_type: "completed_objective",
+            objective_id: id
+          });
+
         toast({
           title: "Objetivo eliminado",
-          description: "El objetivo y tu progreso han sido eliminados"
+          description: "Tu progreso y notificaciones fueron eliminados"
         });
-        setHasObjective(false);
 
-        // Reset completed state for all items
-        setItems(prev => prev.map(item => ({
-          ...item,
-          completed: false
-        })));
+        setHasObjective(false);
+        setItems(prev => prev.map(i => ({ ...i, completed: false })));
+
       } else {
-        const {
-          error
-        } = await supabase.from("user_objectives").insert({
+        await supabase.from("user_objectives").insert({
           user_id: user.id,
           objective_id: id
         });
-        if (error) throw error;
+
         toast({
           title: "¡Objetivo agregado!",
           description: "Ahora puedes marcar los lugares que visites"
         });
+
         setHasObjective(true);
       }
     } catch (error: any) {
@@ -159,45 +193,48 @@ const ObjectiveDetail = () => {
       });
     }
   };
-  const handleToggleItem = async (itemId: string, completed: boolean) => {
-    if (!hasObjective) {
-      toast({
-        title: "Agrega el objetivo primero",
-        description: "Debes agregar el objetivo antes de marcar lugares",
-        variant: "destructive"
-      });
-      return;
-    }
-    try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      if (completed) {
-        const {
-          error
-        } = await supabase.from("user_progress").delete().eq("user_id", user.id).eq("objective_item_id", itemId);
-        if (error) throw error;
 
-        // Delete the activity feed entry for this visited place
+
+  // ✅ CORRECCIÓN PRINCIPAL 2:
+  // Delete de completed_objective simplificado
+  const handleToggleItem = async (itemId: string, completed: boolean) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (!hasObjective) {
+        toast({
+          title: "Agrega el objetivo primero",
+          description: "Debes agregar el objetivo antes de marcar lugares",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (completed) {
+        // UNDO visited_place
+        await supabase
+          .from("user_progress")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("objective_item_id", itemId);
+
         await supabase
           .from("activity_feed")
           .delete()
-          .eq("user_id", user.id)
-          .eq("objective_item_id", itemId)
-          .eq("activity_type", "visited_place");
+          .match({
+            user_id: user.id,
+            objective_item_id: itemId,
+            activity_type: "visited_place"
+          });
+
       } else {
-        const {
-          error
-        } = await supabase.from("user_progress").insert({
+        // ADD visited_place
+        await supabase.from("user_progress").insert({
           user_id: user.id,
           objective_item_id: itemId
         });
-        if (error) throw error;
 
-        // Add activity to feed
         const item = items.find(i => i.id === itemId);
         if (item && objective) {
           await supabase.from("activity_feed").insert({
@@ -210,41 +247,44 @@ const ObjectiveDetail = () => {
           });
         }
       }
-      
-      const updatedItems = items.map(item => item.id === itemId ? {
-        ...item,
-        completed: !completed
-      } : item);
+
+      // update local state
+      const updatedItems = items.map(i =>
+        i.id === itemId ? { ...i, completed: !completed } : i
+      );
       setItems(updatedItems);
 
-      const newCompletedCount = updatedItems.filter(i => i.completed).length;
+      const completedCount = updatedItems.filter(i => i.completed).length;
 
-      // Check if objective is now 100% complete
-      if (!completed && objective) {
-        if (newCompletedCount === objective.total_items) {
-          await supabase.from("activity_feed").insert({
-            user_id: user.id,
-            activity_type: "completed_objective",
-            objective_id: objective.id,
-            objective_title: objective.title
-          });
-          
-          toast({
-            title: "¡Objetivo completado! 🎉",
-            description: `Has completado ${objective.title}`
-          });
-        }
+      // Objective completed
+      if (!completed && objective && completedCount === objective.total_items) {
+        await supabase.from("activity_feed").insert({
+          user_id: user.id,
+          activity_type: "completed_objective",
+          objective_id: objective.id,
+          objective_item_id: objective.id,
+          objective_title: objective.title,
+          item_name: null
+        });
+
+        toast({
+          title: "¡Objetivo completado! 🎉",
+          description: `Has completado ${objective.title}`
+        });
       }
 
-      // If objective is no longer complete, remove the completed objective activity
-      if (completed && objective && newCompletedCount < objective.total_items) {
+      // ✅ CORRECCIÓN: delete simple y seguro
+      if (completed && objective && completedCount < objective.total_items) {
         await supabase
           .from("activity_feed")
           .delete()
-          .eq("user_id", user.id)
-          .eq("objective_id", objective.id)
-          .eq("activity_type", "completed_objective");
+          .match({
+            user_id: user.id,
+            objective_id: objective.id,
+            activity_type: "completed_objective"
+          });
       }
+
     } catch (error: any) {
       toast({
         title: "Error",
@@ -253,47 +293,70 @@ const ObjectiveDetail = () => {
       });
     }
   };
+
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">Cargando...</div>
-      </div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Cargando...
+      </div>
+    );
   }
+
   if (!objective) {
-    return <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">Objetivo no encontrado</div>
-      </div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Objetivo no encontrado
+      </div>
+    );
   }
-  const completedCount = items.filter(item => item.completed).length;
-  const progress = completedCount / objective.total_items * 100;
-  return <div className="min-h-screen bg-background pb-20">
-      <AppHeader title={objective.title} showBack action={<div className="text-sm font-semibold text-primary">
-            {Math.round(progress)}%
-          </div>} />
+
+  const completedCount = items.filter(i => i.completed).length;
+  const progress = (completedCount / objective.total_items) * 100;
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <AppHeader
+        title={objective.title}
+        showBack
+        action={<div className="text-sm font-semibold text-primary">{Math.round(progress)}%</div>}
+      />
 
       <main className="max-w-lg mx-auto">
         <div className="relative h-64 border-b border-border">
-          <img src={objective.image_url} alt={objective.title} className="w-full h-full object-cover" />
+          <img
+            src={objective.image_url}
+            alt={objective.title}
+            className="w-full h-full object-cover"
+          />
         </div>
 
         <div className="p-4">
-          {!hasObjective ? <div className="space-y-6 mb-6">
-              <div>
-                <h2 className="text-xl font-semibold mb-2">Sobre este objetivo</h2>
-                <p className="text-muted-foreground">{objective.description}</p>
-              </div>
-              
-              {items.length > 0 && <div>
+          {!hasObjective ? (
+            <>
+              <h2 className="text-xl font-semibold mb-2">Sobre este objetivo</h2>
+
+              <p className="text-muted-foreground mb-6">
+                {objective.description}
+              </p>
+
+              {items.length > 0 && (
+                <>
                   <h3 className="text-lg font-semibold mb-3">Mapa de lugares</h3>
                   <ObjectiveMap items={items} />
-                  <p className="text-sm text-muted-foreground mt-2 text-center">
-                    {objective.total_items} lugares para descubrir
-                  </p>
-                </div>}
+                </>
+              )}
 
-              <Button onClick={handleAddObjective} className="w-full bg-primary text-primary-foreground" size="lg">
+              <Button
+                onClick={handleAddObjective}
+                className="w-full bg-primary text-primary-foreground"
+                size="lg"
+              >
                 Agregar objetivo
               </Button>
-            </div> : <>
+            </>
+          ) : (
+            <>
               <div className="flex gap-2 mb-6">
                 <Button onClick={() => setSummaryDialogOpen(true)} variant="outline" className="flex-1">
                   <Info className="w-4 h-4 mr-2" />
@@ -307,35 +370,61 @@ const ObjectiveDetail = () => {
               <div className="mb-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input type="text" placeholder="Buscar lugares..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+                  <Input
+                    type="text"
+                    placeholder="Buscar lugares..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
               </div>
 
               <div className="space-y-1">
-                {filteredItems.length === 0 ? <p className="text-center text-muted-foreground py-8">
+                {filteredItems.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">
                     No se encontraron lugares
-                  </p> : filteredItems.map(item => <div key={item.id} className="flex gap-2">
-                      <button onClick={() => handleToggleItem(item.id, item.completed)} className="flex-1 flex items-center gap-3 p-4 hover:bg-muted rounded-lg transition-colors">
+                  </p>
+                ) : (
+                  filteredItems.map((item) => (
+                    <div key={item.id} className="flex gap-2">
+                      <button
+                        onClick={() => handleToggleItem(item.id, item.completed)}
+                        className="flex-1 flex items-center gap-3 p-4 hover:bg-muted rounded-lg transition-colors"
+                      >
                         <Checkbox checked={item.completed} className="pointer-events-none" />
                         <span className={item.completed ? "line-through text-muted-foreground" : ""}>
                           {item.name}
                         </span>
                       </button>
-                      <Button onClick={() => {
-                setSelectedPlace(item);
-                setDialogOpen(true);
-              }} variant="outline" size="icon" className="shrink-0">
+                      <Button
+                        onClick={() => {
+                          setSelectedPlace(item);
+                          setDialogOpen(true);
+                        }}
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                      >
                         <Info className="w-4 h-4" />
                       </Button>
-                    </div>)}
+                    </div>
+                  ))
+                )}
               </div>
-            </>}
+            </>
+          )}
         </div>
       </main>
 
       <BottomNav />
-      
-      <PlaceDetailDialog place={selectedPlace} open={dialogOpen} onOpenChange={setDialogOpen} onToggle={handleToggleItem} />
+
+      <PlaceDetailDialog
+        place={selectedPlace}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onToggle={handleToggleItem}
+      />
 
       <Dialog open={summaryDialogOpen} onOpenChange={setSummaryDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -343,21 +432,19 @@ const ObjectiveDetail = () => {
             <DialogTitle>{objective.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Descripción</h3>
-              <p className="text-muted-foreground">{objective.description}</p>
-            </div>
-            
-            {items.length > 0 && <div>
+            <p className="text-muted-foreground">{objective.description}</p>
+
+            {items.length > 0 && (
+              <>
                 <h3 className="text-lg font-semibold mb-3">Mapa de lugares</h3>
                 <ObjectiveMap items={items} />
-                <p className="text-sm text-muted-foreground mt-2 text-center">
-                  {objective.total_items} lugares en total
-                </p>
-              </div>}
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
-    </div>;
+    </div>
+  );
 };
+
 export default ObjectiveDetail;
