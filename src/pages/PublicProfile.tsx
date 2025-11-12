@@ -198,8 +198,18 @@ const PublicProfile = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <AppHeader title={profile.username ?? "Perfil"} showBack={cameFromExplore} />
-
+      <AppHeader 
+        title={profile.username ?? "Perfil"} 
+        showBack={cameFromExplore}
+        action={
+          isMyProfile ? (
+            <Button size="sm" variant="ghost" onClick={() => navigate("/profile")}>
+              Ver mis datos
+            </Button>
+          ) : null
+        }
+        />
+      
       <main className="max-w-lg mx-auto p-4 space-y-6">
         <div className="flex flex-col items-center py-6">
           <div className="w-28 h-28 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border">

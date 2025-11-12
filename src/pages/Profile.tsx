@@ -24,6 +24,7 @@ interface Profile {
   email: string;
   phone?: string;
   avatar_url?: string;
+  is_map_public?: boolean;
 }
 
 const Profile = () => {
@@ -60,15 +61,11 @@ const Profile = () => {
         .single();
 
       if (data) {
-        // If there's an avatar path, generate a signed URL
         if (data.avatar_url) {
           const { data: signedUrlData } = await supabase.storage
             .from("avatars")
-            .createSignedUrl(data.avatar_url, 3600); // URL válida por 1 hora
-          
-          if (signedUrlData) {
-            data.avatar_url = signedUrlData.signedUrl;
-          }
+            .createSignedUrl(data.avatar_url, 3600);
+          if (signedUrlData) data.avatar_url = signedUrlData.signedUrl;
         }
         setProfile(data);
       }
@@ -110,7 +107,6 @@ const Profile = () => {
           phone: profile.phone || null,
           avatar_url: profile.avatar_url,
           is_map_public: profile.is_map_public,
-
         })
         .eq("id", user.id);
 
@@ -156,52 +152,32 @@ const Profile = () => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("No hay usuario autenticado");
-      }
+      if (!user) throw new Error("No hay usuario autenticado");
 
-      // Delete old avatar if exists
       if (profile?.avatar_url) {
-        const oldPath = profile.avatar_url.split('/avatars/').pop();
-        if (oldPath) {
-          await supabase.storage.from("avatars").remove([oldPath]);
-        }
+        const oldPath = profile.avatar_url.split("/avatars/").pop();
+        if (oldPath) await supabase.storage.from("avatars").remove([oldPath]);
       }
 
       const fileExt = file.name.split(".").pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-      // Upload the file
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, file, { 
-          cacheControl: '3600',
-          upsert: false 
-        });
+        .upload(fileName, file, { cacheControl: "3600", upsert: false });
 
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
-      // Store just the file path, not the full URL
       const avatarPath = fileName;
 
-      console.log("Avatar path:", avatarPath);
-
-      // Update profile state with the path
       setProfile((prev) => (prev ? { ...prev, avatar_url: avatarPath } : null));
 
-      // Update database with the path
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: avatarPath })
         .eq("id", user.id);
 
-      if (updateError) {
-        console.error("Update error:", updateError);
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       toast({
         title: "Foto actualizada",
@@ -216,10 +192,7 @@ const Profile = () => {
       });
     } finally {
       setUploading(false);
-      // Clear the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -254,8 +227,6 @@ const Profile = () => {
         showBack
       />
 
-      
-
       <main className="max-w-lg mx-auto p-4">
         <div className="space-y-6">
           <div className="flex flex-col items-center py-8">
@@ -286,7 +257,7 @@ const Profile = () => {
                 className="hidden"
               />
             </div>
-            
+
             {!editing && (
               <>
                 <h2 className="text-2xl font-bold mt-4">{profile?.username}</h2>
@@ -298,8 +269,6 @@ const Profile = () => {
             )}
           </div>
 
-          
-
           {editing ? (
             <div className="space-y-4">
               <div className="space-y-2">
@@ -307,12 +276,11 @@ const Profile = () => {
                 <Input
                   id="username"
                   value={profile?.username || ""}
-                  onChange={(e) => {
+                  onChange={(e) =>
                     setProfile((prev) =>
                       prev ? { ...prev, username: e.target.value } : null
-                    );
-                    setErrors((prev) => ({ ...prev, username: "" }));
-                  }}
+                    )
+                  }
                   className={errors.username ? "border-destructive" : ""}
                 />
                 {errors.username && (
@@ -324,10 +292,11 @@ const Profile = () => {
                 <Label htmlFor="city">Ciudad</Label>
                 <Select
                   value={profile?.city || ""}
-                  onValueChange={(value) => {
-                    setProfile((prev) => (prev ? { ...prev, city: value } : null));
-                    setErrors((prev) => ({ ...prev, city: "" }));
-                  }}
+                  onValueChange={(value) =>
+                    setProfile((prev) =>
+                      prev ? { ...prev, city: value } : null
+                    )
+                  }
                 >
                   <SelectTrigger
                     className={errors.city ? "border-destructive" : ""}
@@ -353,18 +322,13 @@ const Profile = () => {
                   id="phone"
                   type="tel"
                   value={profile?.phone || ""}
-                  onChange={(e) => {
+                  onChange={(e) =>
                     setProfile((prev) =>
                       prev ? { ...prev, phone: e.target.value } : null
-                    );
-                    setErrors((prev) => ({ ...prev, phone: "" }));
-                  }}
+                    )
+                  }
                   placeholder="+56912345678"
-                  className={errors.phone ? "border-destructive" : ""}
                 />
-                {errors.phone && (
-                  <p className="text-xs text-destructive">{errors.phone}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -377,32 +341,67 @@ const Profile = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">Email</Label>
-                <p className="text-sm">{profile?.email}</p>
-              </div>
-              {profile?.phone && (
+            <>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Teléfono</Label>
-                  <p className="text-sm">{profile.phone}</p>
+                  <Label className="text-muted-foreground">Email</Label>
+                  <p className="text-sm">{profile?.email}</p>
                 </div>
-              )}
-            </div>
+                {profile?.phone && (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Teléfono</Label>
+                    <p className="text-sm">{profile.phone}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ Switch visible solo en vista no editable */}
+              <div className="flex items-center justify-between py-4 px-2 border-t border-border">
+                <Label htmlFor="is_map_public">Mapa público</Label>
+                <Switch
+                  checked={profile?.is_map_public || false}
+                  onCheckedChange={async (val) => {
+                    if (!profile) return;
+
+                    // Actualiza estado local para respuesta instantánea
+                    setProfile((prev) => (prev ? { ...prev, is_map_public: val } : null));
+
+                    try {
+                      const { data: { user } } = await supabase.auth.getUser();
+                      if (!user) throw new Error("Usuario no autenticado");
+
+                      const { error } = await supabase
+                        .from("profiles")
+                        .update({ is_map_public: val })
+                        .eq("id", user.id);
+
+                      if (error) throw error;
+
+                      toast({
+                        title: val ? "Mapa visible 🌍" : "Mapa oculto 🔒",
+                        description: val
+                          ? "Tu mapa ahora es público para otros usuarios."
+                          : "Tu mapa ya no es visible para otros usuarios.",
+                      });
+                    } catch (error: any) {
+                      console.error("Error actualizando mapa público:", error);
+                      toast({
+                        title: "Error",
+                        description: "No se pudo actualizar la visibilidad del mapa.",
+                        variant: "destructive",
+                      });
+
+                      // Si falla, revertimos el cambio local
+                      setProfile((prev) => (prev ? { ...prev, is_map_public: !val } : null));
+                    }
+                  }}
+                  id="is_map_public"
+                />
+              </div>
+
+            </>
           )}
 
-          <div className="flex items-center justify-between py-2">
-            <Label htmlFor="is_map_public">Mapa público</Label>
-            <Switch
-              checked={profile?.is_map_public || false}
-              onCheckedChange={(val) =>
-                setProfile((prev) => prev ? { ...prev, is_map_public: val } : null)
-              }
-              id="is_map_public"
-            />
-          </div>
-
-          <div className="pt-6 border-t border-border space-y-3">
             <Button
               onClick={handleSignOut}
               variant="destructive"
@@ -410,7 +409,6 @@ const Profile = () => {
             >
               Cerrar sesión
             </Button>
-          </div>
         </div>
       </main>
 
